@@ -39,36 +39,40 @@ func connectServer() *sql.DB {
 
 func createTable(db *sql.DB) error {
 	_, err := db.Exec(`
-CREATE TABLE IF NOT EXISTS torrents (
+CREATE TABLE IF NOT EXISTS nyaa_torrents (
 	nid integer PRIMARY KEY,
 	name varchar(255),
-	torrent text
+	torrent bytea
 )`)
 	return err
 }
 
-func addTorrent(db *sql.DB, id int32, name string, torrent string) (newId int32, err error) {
+func addTorrent(db *sql.DB, id int32, name string, torrent []byte) (newId int32, err error) {
 	statement := `
-INSERT INTO torrents (id, name, torrent)
+INSERT INTO nyaa_torrents (id, name, torrent)
 VALUES ($1, $2, $3) RETURNING id`
 	newId = 0
 	err = db.QueryRow(statement, id, name, torrent).Scan(&newId)
 	return newId, err
 }
 
-func getTorrentNyaa(db *sql.DB, id int32, torrentData chan string) {
-	statement := `SELECT torrent FROM torrents WHERE nid = $1 LIMIT 1`
+func getTorrentNyaa(db *sql.DB, id int32, name string, torrentData chan []byte) {
+	statement := `SELECT torrent FROM nyaa_torrents WHERE nid = $1 LIMIT 1`
 	row := db.QueryRow(statement, id)
-	tData := ""
+	tData := []byte{}
 	err := row.Scan(&tData)
 	switch err {
 	case sql.ErrNoRows:
 		//Query for one
-		fmt.Println("Looking for data")
-		tData := request(fmt.Sprintf("https://nyaa.si/download/%d.torrent", id))
+		fmt.Printf("Adding to DB %d\n", id)
+		tData, err := request(fmt.Sprintf("https://nyaa.si/download/%d.torrent", id))
+		if err != nil {
+			//TODO: Handler for not being able to download the torrent
+			panic(err)
+		}
 		//decode(tData)
-		fmt.Printf("Got something! %d\n", len(tData))
-		torrentData <- string(tData)
+		addTorrent(db, id, name, tData)
+		torrentData <- tData
 	default:
 		fmt.Println(err)
 		fmt.Println("How did we get here")

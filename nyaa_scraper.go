@@ -11,20 +11,18 @@ import (
 
 const URL = "https://nyaa.si"
 
-func request(url string) []byte {
+func request(url string) (data []byte, err error) {
 	resp, err := http.Get(url)
 	if err != nil {
-		//TODO: Log this to error and don't panic
-		panic(err)
+		return []byte{}, err
 	}
 	defer resp.Body.Close()
 	bytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		panic(err)
+		return []byte{}, err
 	}
-	//fmt.Println("HTML:\n\n", string(bytes))
 
-	return bytes
+	return bytes, nil
 }
 
 func getAttr(t html.Token, attr string) (val string) {
@@ -48,7 +46,7 @@ func checkAttr(t html.Token, attrName string, attrVal string) (has bool) {
 	return false
 }
 
-func nyaaSearch(query string, page string) (torrents []Torrent, err error) {
+func nyaaSearch(query string, page string) (nyaaResponse ENDsearch, err error) {
 	extractNumRE, _ := regexp.Compile("[0-9]+")
 	//Initial scrape
 	qValues := url.Values{}
@@ -61,20 +59,22 @@ func nyaaSearch(query string, page string) (torrents []Torrent, err error) {
 	}
 	nyaaUrl := fmt.Sprintf("%s?%s", URL, qValues.Encode())
 	resp, err := http.Get(nyaaUrl)
-	nyaaResp := []Torrent{}
+	nyaaResp := ENDsearch{
+		[]NyaaTorrent{},
+		true,
+	}
 	if err != nil {
-		fmt.Printf("Failed to crawl page %s", nyaaUrl)
+		fmt.Printf("Failed to crawl page %s\n", nyaaUrl)
 		return nyaaResp, err
 	}
 	b := resp.Body
 	defer b.Close()
 	z := html.NewTokenizer(b)
-	row := false
-	context := 0
-	/*
-		Valid contexts:
-		0: NONE
-		1: SET TORRENT
+	var context uint8 = 0
+	/*  Context
+	OFFSET VALUE
+	0: ROW
+	1: VALID COLUMN
 	*/
 	for {
 		tt := z.Next()
@@ -86,26 +86,29 @@ func nyaaSearch(query string, page string) (torrents []Torrent, err error) {
 			t := z.Token()
 			switch {
 			case t.Data == "a":
-				if !row || context == 0 {
+				if context&3 < 3 || getAttr(t, "class") == "comments" {
 					continue
 				}
-				nyaaResp = append(nyaaResp, Torrent{
+				nyaaResp.Torrents = append(nyaaResp.Torrents, NyaaTorrent{
 					extractNumRE.FindString(getAttr(t, "href")),
 					getAttr(t, "title"),
 				})
 				context = 0
+			case t.Data == "li":
+				if checkAttr(t, "class", "next") {
+					nyaaResp.LastPage = false
+				}
 			case t.Data == "tr":
-				row = true
+				context = 1
 			case t.Data == "td":
 				if checkAttr(t, "colspan", "2") {
-					context = 1
+					context = context | 2
 				}
 			}
 		case tt == html.EndTagToken:
-			if !row || z.Token().Data != "tr" {
+			if context&1 == 0 || z.Token().Data != "tr" {
 				continue
 			}
-			row = false
 			context = 0
 		}
 	}
