@@ -2,7 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"github.com/jmoiron/sqlx"
+	"strconv"
 
 	_ "github.com/lib/pq"
 )
@@ -15,11 +18,11 @@ const (
 	dbname   = "ruumi"
 )
 
-func connectServer() *sql.DB {
+func connectServer() *sqlx.DB {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
 
-	db, err := sql.Open("postgres", psqlInfo)
+	db, err := sqlx.Connect("postgres", psqlInfo)
 	if err != nil {
 		panic(err)
 	}
@@ -37,17 +40,76 @@ func connectServer() *sql.DB {
 	return db
 }
 
-func createTable(db *sql.DB) error {
-	_, err := db.Exec(`
+func createTable(db *sqlx.DB) (err error) {
+	_, err = db.Exec(`
 CREATE TABLE IF NOT EXISTS nyaa_torrents (
 	nid integer PRIMARY KEY,
 	name varchar(255),
 	torrent bytea
 )`)
-	return err
+	if err != nil {
+		return
+	}
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS gogo_categories (
+	gid SERIAL PRIMARY KEY,
+	name varchar(225),
+	caturl varchar(255),
+	episodes json
+)`)
+	if err != nil {
+		return
+	}
+	return
 }
 
-func addTorrent(db *sql.DB, id int32, name string, torrent []byte) (newId int32, err error) {
+func addCategory(db *sqlx.DB, catName string, catURL string) {
+	id := 0
+	err := db.QueryRow(`
+INSERT INTO gogo_categories(name, caturl, episodes)
+VALUES ($1, $2, '{}'::json) RETURNING gid
+`, catName, catURL).Scan(&id)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func getEpisode(db *sqlx.DB, catName string, episodeNumber int, episode chan GOGOEpisode) {
+	category := GOGOCategoryD{}
+	err := db.Get(&category, `SELECT * FROM gogo_categories WHERE name = $1 LIMIT 1`, catName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	eps := make(map[string]interface{})
+	err = json.Unmarshal([]byte(category.Episodes), &eps)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if ep, ok := eps[strconv.Itoa(episodeNumber)]; ok {
+		episodeHolder := GOGOEpisode{}
+		marshalizedEp, err := json.Marshal(ep)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		json.Unmarshal(marshalizedEp, &episodeHolder)
+		episode <- episodeHolder
+	} else {
+		epSrc := make(chan string)
+		go gogoFetchEpisode(category.CatURL, episodeNumber, epSrc)
+		src := <-epSrc
+		episode <- GOGOEpisode{
+			EpID:   strconv.Itoa(episodeNumber),
+			SrcURL: src,
+		}
+	}
+}
+
+func addTorrent(db *sqlx.DB, id int32, name string, torrent []byte) (newId int32, err error) {
 	statement := `
 INSERT INTO nyaa_torrents (id, name, torrent)
 VALUES ($1, $2, $3) RETURNING id`
@@ -56,7 +118,7 @@ VALUES ($1, $2, $3) RETURNING id`
 	return newId, err
 }
 
-func getTorrentNyaa(db *sql.DB, id int32, name string, torrentData chan []byte) {
+func getTorrentNyaa(db *sqlx.DB, id int32, name string, torrentData chan []byte) {
 	statement := `SELECT torrent FROM nyaa_torrents WHERE nid = $1 LIMIT 1`
 	row := db.QueryRow(statement, id)
 	tData := []byte{}

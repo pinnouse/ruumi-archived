@@ -1,5 +1,27 @@
 package main
 
+import "time"
+
+//GOGO
+type GOGOEpisode struct {
+	EpID   string `json:"epID"`
+	SrcURL string `json:"srcURL"`
+}
+
+type GOGOCategory struct {
+	Name     string        `json:"name"`
+	CatURL   string        `json:"catURL""`
+	Episodes []GOGOEpisode `json:"episodes"`
+}
+
+type GOGOCategoryD struct {
+	ID       string `db:"gid"`
+	Name     string `db:"name"`
+	CatURL   string `db:"caturl"`
+	Episodes string `db:"episodes"`
+}
+
+//BITTORRENT
 type BTFile struct {
 	Length uint32
 	Path   [][]byte
@@ -26,6 +48,34 @@ type BitTorrent struct {
 type NyaaTorrent struct {
 	Id   string
 	Name string
+}
+
+//ROOMS
+type Message struct {
+	Id      string
+	Content string
+	Sent    time.Time
+	Author  User
+}
+
+type Video struct {
+	Torrent BitTorrent
+	Seek    time.Time
+}
+
+type User struct {
+	Id    string
+	Name  string
+	Email string
+}
+
+type Room struct {
+	Id       string
+	Owner    User
+	Video    Video
+	Seek     uint32
+	Users    []User
+	Messages []Message
 }
 
 //ENDPOINT STRUCTS

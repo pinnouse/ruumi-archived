@@ -97,6 +97,14 @@ func main() {
 		fmt.Println(string(jsonTorrent))
 	})
 
+	http.HandleFunc("/gogo", func(w http.ResponseWriter, r *http.Request) {
+		gogoSearchHandler(w, r, db)
+	})
+	http.HandleFunc("/gogoCategory", gogoCategoryHandler)
+	http.HandleFunc("/gogoEpisode", func(w http.ResponseWriter, r *http.Request) {
+		gogoEpisodeHandler(w, r, db)
+	})
+
 	/* Download a Bencoded file
 	torrentD := make(chan []byte)
 	go getTorrentNyaa(db, 1204164, "Boruto I think", torrentD)
