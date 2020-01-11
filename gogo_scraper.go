@@ -131,14 +131,15 @@ func gogoSearch(searchTerm string, page int) (categories []GOGOCategory, err err
 				categories = append(categories, GOGOCategory{
 					Name:     getAttr(t, "title"),
 					CatURL:   getAttr(t, "href"),
-					Episodes: []GOGOEpisode{},
+					Episodes: 0,
 				})
 				added = true
 			}
 		case tt == html.EndTagToken:
-			if z.Token().Data == "ul" && inItems {
+			t := z.Token()
+			if t.Data == "ul" && inItems {
 				return
-			} else if inItems && z.Token().Data == "li" {
+			} else if t.Data == "li" {
 				added = false
 			}
 		}

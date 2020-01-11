@@ -3,13 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jmoiron/sqlx"
+	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"net/url"
 	"strconv"
 )
 
-func gogoSearchHandler(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+func gogoSearchHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
 	values, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		fmt.Fprintf(w, "Couldn't understand your query: %s", err)
@@ -33,54 +33,69 @@ func gogoSearchHandler(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	for _, cat := range categories {
-		addCategory(db, cat.Name, cat.CatURL)
-	}
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, string(jsonCat))
+	for _, cat := range categories {
+		dbSetCategory(client, cat)
+	}
 }
 
-func gogoCategoryHandler(w http.ResponseWriter, r *http.Request) {
+func gogoCategoryHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
 	values, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		fmt.Fprintf(w, "Couldn't understand your query: %s", err)
 		return
 	}
+
 	catURL := values.Get("category")
-	numEpisodes, err := gogoFetchCategory(catURL)
+	cat, err := dbGetCategory(client, catURL)
+	numEpisodes := 0
+	if cat.Episodes == 0 {
+		numEpisodes, err = gogoFetchCategory(catURL)
+		cat.Episodes = numEpisodes
+		dbSetCategory(client, cat)
+	} else {
+		numEpisodes = cat.Episodes
+	}
+
 	if err != nil {
 		fmt.Fprintf(w, "Error fetching category")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "{\"episodes\":%d}", numEpisodes)
 }
 
-func gogoEpisodeHandler(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+func gogoEpisodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
 	values, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		fmt.Fprintf(w, "Couldn't understand your query: %s", err)
 		return
 	}
-	catName := values.Get("category")
+	catURL := values.Get("category")
 	epNum, err := strconv.Atoi(values.Get("episode"))
 	if err != nil {
 		epNum = 1
 	}
-	episode := make(chan GOGOEpisode)
-	go getEpisode(db, catName, epNum, episode)
-	ep := <-episode
+	ep, err := dbGetEpisode(client, catURL, epNum)
+	if err != nil {
+		fmt.Fprintf(w, "Internal error whoops: %s", err)
+		return
+	}
 	epJSON, err := json.Marshal(ep)
 	if err != nil {
 		fmt.Fprintf(w, "Internal error, my b: %s", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, string(epJSON))
 }
