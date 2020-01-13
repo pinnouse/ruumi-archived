@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -58,7 +57,6 @@ func dbSetSearch(client *mongo.Client, results GOGOSearchResults) bool {
 			"lastUpdated": time.Now().Unix(),
 		})
 	}
-	fmt.Println(err)
 	return err == nil
 }
 
@@ -112,13 +110,29 @@ func dbGetCategory(client *mongo.Client, categoryURL string) (category GOGOCateg
 func dbSetEpisode(client *mongo.Client, episode GOGOEpisode) bool {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	collection := client.Database("gogo").Collection("episodes")
-	_, err := collection.InsertOne(
-		ctx, bson.M{
-			"epNum":       episode.EpNum,
-			"srcURL":      episode.SrcURL,
-			"category":    episode.Category,
-			"lastUpdated": time.Now().Unix(),
-		})
+	ep := GOGOEpisode{}
+	filter := bson.M{
+		"epNum":    episode.EpNum,
+		"category": episode.Category,
+	}
+	err := dbEpisodeCollection(client).FindOne(ctx, filter).Decode(&ep)
+	if err == nil {
+		_, err = collection.ReplaceOne(
+			ctx, filter, bson.M{
+				"epNum":       episode.EpNum,
+				"srcURL":      episode.SrcURL,
+				"category":    episode.Category,
+				"lastUpdated": time.Now().Unix(),
+			})
+	} else {
+		_, err = collection.InsertOne(
+			ctx, bson.M{
+				"epNum":       episode.EpNum,
+				"srcURL":      episode.SrcURL,
+				"category":    episode.Category,
+				"lastUpdated": time.Now().Unix(),
+			})
+	}
 	return err == nil
 }
 
