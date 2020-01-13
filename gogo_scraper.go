@@ -101,13 +101,14 @@ func gogoFetchCategory(categoryURL string) (episodes int, err error) {
 	}
 }
 
-func gogoSearch(searchTerm string, page int) (categories []GOGOCategory, err error) {
+func gogoSearch(searchTerm string, page int, categories chan []GOGOCategory) {
 	queries := url.Values{}
 	queries.Set("keyword", searchTerm)
 	queries.Set("page", strconv.Itoa(page))
 	resp, err := http.Get(fmt.Sprintf("%s/search.html?%s", BASE_URL, queries.Encode()))
-	categories = []GOGOCategory{}
+	cats := []GOGOCategory{}
 	if err != nil {
+		categories <- cats
 		return
 	}
 
@@ -120,6 +121,7 @@ func gogoSearch(searchTerm string, page int) (categories []GOGOCategory, err err
 		tt := z.Next()
 		switch {
 		case tt == html.ErrorToken:
+			categories <- cats
 			return
 		case tt == html.StartTagToken:
 			t := z.Token()
@@ -128,7 +130,7 @@ func gogoSearch(searchTerm string, page int) (categories []GOGOCategory, err err
 			}
 
 			if inItems && t.Data == "a" && !added {
-				categories = append(categories, GOGOCategory{
+				cats = append(cats, GOGOCategory{
 					Name:     getAttr(t, "title"),
 					CatURL:   getAttr(t, "href"),
 					Episodes: 0,
@@ -138,6 +140,7 @@ func gogoSearch(searchTerm string, page int) (categories []GOGOCategory, err err
 		case tt == html.EndTagToken:
 			t := z.Token()
 			if t.Data == "ul" && inItems {
+				categories <- cats
 				return
 			} else if t.Data == "li" {
 				added = false

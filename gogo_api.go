@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 func gogoSearchHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
@@ -15,18 +16,20 @@ func gogoSearchHandler(w http.ResponseWriter, r *http.Request, client *mongo.Cli
 		fmt.Fprintf(w, "Couldn't understand your query: %s", err)
 		return
 	}
-	keyword := values.Get("keyword")
+	q := values.Get("q")
 	page, err := strconv.Atoi(values.Get("page"))
 	if err != nil {
 		page = 1
 	}
-	categories, err := gogoSearch(keyword, page)
+
+	categories := dbGetSearch(client, strings.TrimSpace(strings.ToLower(q)), page)
+
 	if err != nil {
 		fmt.Fprintf(w, "There was an error searching")
 		return
 	}
 
-	jsonCat, err := json.Marshal(categories)
+	jsonCat, err := json.Marshal(categories.Results)
 	if err != nil {
 		fmt.Fprintf(w, "Internal error, whoops!")
 		return
@@ -37,7 +40,7 @@ func gogoSearchHandler(w http.ResponseWriter, r *http.Request, client *mongo.Cli
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, string(jsonCat))
-	for _, cat := range categories {
+	for _, cat := range categories.Results {
 		dbSetCategory(client, cat)
 	}
 }
