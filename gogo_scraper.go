@@ -16,6 +16,8 @@ func fetchSrcFromEmbed(url string, src chan string) {
 	resp, err := http.Get(url)
 	if err != nil {
 		src <- ""
+		close(src)
+		return
 	}
 	b := resp.Body
 	defer b.Close()
@@ -27,9 +29,11 @@ func fetchSrcFromEmbed(url string, src chan string) {
 	matches := srcExtracter.FindStringSubmatch(string(allBytes))
 	if len(matches) > 0 {
 		src <- matches[1]
+		close(src)
 		return
 	}
 	src <- ""
+	close(src)
 }
 
 func gogoFetchEpisode(categoryURL string, episode int, episodeSrc chan string) {
@@ -37,6 +41,8 @@ func gogoFetchEpisode(categoryURL string, episode int, episodeSrc chan string) {
 	resp, err := http.Get(url)
 	if err != nil {
 		episodeSrc <- ""
+		close(episodeSrc)
+		return
 	}
 	b := resp.Body
 	defer b.Close()
@@ -46,6 +52,8 @@ func gogoFetchEpisode(categoryURL string, episode int, episodeSrc chan string) {
 		switch tt {
 		case html.ErrorToken:
 			episodeSrc <- ""
+			close(episodeSrc)
+			return
 		case html.StartTagToken:
 			token := z.Token()
 			if token.Data == "a" {
@@ -56,6 +64,7 @@ func gogoFetchEpisode(categoryURL string, episode int, episodeSrc chan string) {
 					}
 					go fetchSrcFromEmbed(attr, episodeSrc)
 					<-episodeSrc
+					close(episodeSrc)
 					return
 				}
 			}
@@ -122,6 +131,7 @@ func gogoSearch(searchTerm string, page int, categories chan []GOGOCategory) {
 		switch {
 		case tt == html.ErrorToken:
 			categories <- cats
+			close(categories)
 			return
 		case tt == html.StartTagToken:
 			t := z.Token()
@@ -141,6 +151,7 @@ func gogoSearch(searchTerm string, page int, categories chan []GOGOCategory) {
 			t := z.Token()
 			if t.Data == "ul" && inItems {
 				categories <- cats
+				close(categories)
 				return
 			} else if t.Data == "li" {
 				added = false
