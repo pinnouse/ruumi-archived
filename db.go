@@ -3,17 +3,19 @@ package main
 import (
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"log"
 	"time"
 )
 
 const (
-	db_host = "mongodb://localhost:27017/?readPreference=primary&ssl=false"
+	dbHost = "mongodb://localhost:27017/?readPreference=primary&ssl=false"
 )
 
 func connectDB() (client *mongo.Client) {
-	client, err := mongo.NewClient(options.Client().ApplyURI(db_host))
+	client, err := mongo.NewClient(options.Client().ApplyURI(dbHost))
 	if err != nil {
 		panic(err)
 	}
@@ -22,135 +24,71 @@ func connectDB() (client *mongo.Client) {
 	if err != nil {
 		panic(err)
 	}
-
-	return client
+	return
 }
 
-func dbSearchCollection(client *mongo.Client) (collection *mongo.Collection) {
-	return client.Database("gogo").Collection("searches")
+func dbCollection(client *mongo.Client, collectionName string) (collection *mongo.Collection) {
+	return client.Database("ruumi").Collection(collectionName)
 }
 
-func dbCategoryCollection(client *mongo.Client) (collection *mongo.Collection) {
-	return client.Database("gogo").Collection("categories")
-}
-
-func dbEpisodeCollection(client *mongo.Client) (collection *mongo.Collection) {
-	return client.Database("gogo").Collection("episodes")
-}
-
-func dbSetSearch(client *mongo.Client, results GOGOSearchResults) bool {
+func getUser(client *mongo.Client, userId string) (user User, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	collection := dbSearchCollection(client)
-	r := GOGOSearchResults{}
-	filter := bson.M{"searchTerm": results.SearchTerm}
-	err := collection.FindOne(ctx, filter).Decode(&r)
-	if err == nil {
-		_, err = collection.ReplaceOne(ctx, filter, bson.M{
-			"searchTerm":  results.SearchTerm,
-			"results":     results.Results,
-			"lastUpdated": time.Now().Unix(),
-		})
-	} else {
-		_, err = collection.InsertOne(ctx, bson.M{
-			"searchTerm":  results.SearchTerm,
-			"results":     results.Results,
-			"lastUpdated": time.Now().Unix(),
-		})
-	}
-	return err == nil
+	err = dbCollection(client, "users").FindOne(ctx, bson.M{"id": userId}).Decode(&user)
+	return
 }
 
-func dbGetSearch(client *mongo.Client, searchTerm string, page int) (results GOGOSearchResults) {
+func addUser(client *mongo.Client, user User) (err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	collection := dbSearchCollection(client)
-	filter := bson.M{
-		"searchTerm": searchTerm,
+	_, err = dbCollection(client, "users").InsertOne(ctx, user)
+	return
+}
+
+func search(client *mongo.Client, query string) (results []Anime, err error) {
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	cur, err := dbCollection(client, "anime").Find(ctx, bson.D{
+		{"title", primitive.Regex{Pattern: query, Options: "i"}},
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
-	err := collection.FindOne(ctx, filter).Decode(&results)
-	if err != nil || time.Now().Unix()-results.LastUpdated > 60*60*24 {
-		categories := make(chan []GOGOCategory)
-		go gogoSearch(searchTerm, page, categories)
-		results = GOGOSearchResults{
-			SearchTerm:  searchTerm,
-			Results:     <-categories,
-			LastUpdated: 0,
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
+		var result Anime
+		if err = cur.Decode(&result); err != nil {
+			log.Fatal(err)
 		}
-		dbSetSearch(client, results)
+		results = append(results, result)
+	}
+	if err = cur.Err(); err != nil {
+		log.Fatal(err)
 	}
 	return
 }
 
-func dbSetCategory(client *mongo.Client, category GOGOCategory) bool {
+func getAnime(client *mongo.Client, id int32) (result Anime, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	collection := dbCategoryCollection(client)
-	updated := bson.M{
-		"name":     category.Name,
-		"catURL":   category.CatURL,
-		"episodes": category.Episodes,
+	err = dbCollection(client, "anime").FindOne(
+		ctx, bson.M{"id": id}).Decode(&result)
+	if err != nil {
+		log.Fatal(err)
 	}
-	cat, err := dbGetCategory(client, category.CatURL)
-	if err == nil && cat.Episodes < category.Episodes {
-		filter := bson.M{"catURL": category.CatURL}
-		_, err = collection.ReplaceOne(ctx, filter, updated)
-	} else if err != nil {
-		_, err = collection.InsertOne(ctx, updated)
-	}
-	return err == nil
+	return
 }
 
-func dbGetCategory(client *mongo.Client, categoryURL string) (category GOGOCategory, err error) {
-	cat := GOGOCategory{}
-	filter := bson.M{"catURL": categoryURL}
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
-	collection := dbCategoryCollection(client)
-	err = collection.FindOne(ctx, filter).Decode(&cat)
-	return cat, err
+func addAnime(client *mongo.Client, anime Anime) (err error) {
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	_, err = dbCollection(client, "anime").InsertOne(ctx, anime)
+	return
 }
 
-func dbSetEpisode(client *mongo.Client, episode GOGOEpisode) bool {
+func addEpisode(client *mongo.Client, animeId int32, episode Episode) (err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	collection := client.Database("gogo").Collection("episodes")
-	ep := GOGOEpisode{}
-	filter := bson.M{
-		"epNum":    episode.EpNum,
-		"category": episode.Category,
-	}
-	err := dbEpisodeCollection(client).FindOne(ctx, filter).Decode(&ep)
-	if err == nil {
-		_, err = collection.ReplaceOne(
-			ctx, filter, bson.M{
-				"epNum":       episode.EpNum,
-				"srcURL":      episode.SrcURL,
-				"category":    episode.Category,
-				"lastUpdated": time.Now().Unix(),
-			})
-	} else {
-		_, err = collection.InsertOne(
-			ctx, bson.M{
-				"epNum":       episode.EpNum,
-				"srcURL":      episode.SrcURL,
-				"category":    episode.Category,
-				"lastUpdated": time.Now().Unix(),
-			})
-	}
-	return err == nil
-}
-
-func dbGetEpisode(client *mongo.Client, categoryURL string, episodeNum int) (episode GOGOEpisode, err error) {
-	filter := bson.M{"category": categoryURL, "epNum": episodeNum}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	err = dbEpisodeCollection(client).FindOne(ctx, filter).Decode(&episode)
-	if err != nil || time.Now().Unix()-episode.LastUpdated > 60*5 {
-		epSrcChan := make(chan string)
-		go gogoFetchEpisode(categoryURL, episodeNum, epSrcChan)
-		epSrc := <-epSrcChan
-		episode = GOGOEpisode{
-			EpNum:       episodeNum,
-			SrcURL:      epSrc,
-			Category:    categoryURL,
-			LastUpdated: time.Now().Unix(),
-		}
-		dbSetEpisode(client, episode)
-	}
-	return episode, nil
+	_, err = dbCollection(client, "anime").UpdateOne(
+		ctx,
+		bson.M{"id": animeId},
+		bson.D{{
+			"episodes",
+			bson.D{{"$addToSet", episode}}},
+		})
+	return
 }
