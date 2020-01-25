@@ -7,9 +7,10 @@ type Episode struct {
 }
 
 type Anime struct {
-	Id       int32     `json:"id"`
-	Title    string    `json:"title"`
-	Episodes []Episode `json:"episodes"`
+	Id        int32     `json:"id"`
+	Title     string    `json:"title"`
+	AltTitles []string  `json:"altTitles"`
+	Episodes  []Episode `json:"episodes"`
 }
 
 //User

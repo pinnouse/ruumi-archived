@@ -46,21 +46,28 @@ func addUser(client *mongo.Client, user User) (err error) {
 func search(client *mongo.Client, query string) (results []Anime, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	cur, err := dbCollection(client, "anime").Find(ctx, bson.D{
-		{"title", primitive.Regex{Pattern: query, Options: "i"}},
+		{"$or", bson.A{
+			bson.D{
+				{"title", primitive.Regex{Pattern: query, Options: "i"}},
+			},
+			bson.D{
+				{"altTitles", primitive.Regex{Pattern: query, Options: "i"}},
+			},
+		}},
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	defer cur.Close(ctx)
 	for cur.Next(ctx) {
 		var result Anime
 		if err = cur.Decode(&result); err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 		results = append(results, result)
 	}
 	if err = cur.Err(); err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return
 }
@@ -70,7 +77,7 @@ func getAnime(client *mongo.Client, id int32) (result Anime, err error) {
 	err = dbCollection(client, "anime").FindOne(
 		ctx, bson.M{"id": id}).Decode(&result)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	return
 }
