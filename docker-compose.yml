@@ -15,11 +15,14 @@ services:
     environment:
       ME_CONFIG_MONGODB_ADMINUSERNAME: root
       ME_CONFIG_MONGODB_ADMINPASSWORD: your_password
-  web:
+  ruumi-back:
     build: .
     ports:
       - "8000:8000"
+    links:
+      - mongo:db_host
     environment:
       AUTH: your_auth_key
+      DB_HOST: db_host
     depends_on:
       - mongo

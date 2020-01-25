@@ -2,20 +2,28 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
+	"os"
 	"time"
 )
 
-const (
-	dbHost = "mongodb://localhost:27017/?readPreference=primary&ssl=false"
-)
-
 func connectDB() (client *mongo.Client) {
-	client, err := mongo.NewClient(options.Client().ApplyURI(dbHost))
+	client, err := mongo.NewClient(options.Client().ApplyURI(
+		fmt.Sprintf(
+			"mongodb://%s:27017/?readPreference=primary&ssl=false",
+			func() string {
+				if len(os.Getenv("DB_HOST")) > 0 {
+					return os.Getenv("DB_HOST")
+				} else {
+					return "localhost"
+				}
+			}(),
+		)))
 	if err != nil {
 		panic(err)
 	}
