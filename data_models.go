@@ -2,8 +2,8 @@ package main
 
 //Anime
 type Episode struct {
-	EpNum  uint8  `json:"epNum"`
-	Source string `json:"source"`
+	EpNum uint8  `json:"epNum"`
+	Key   string `json:"key"`
 }
 
 type Anime struct {

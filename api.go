@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"io/ioutil"
@@ -24,6 +26,9 @@ func searchHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client)
 	if err != nil {
 		http.Error(w, "Error parsing animes.", http.StatusInternalServerError)
 		return
+	}
+	if len(js) == 0 {
+		http.Error(w, "No results found.", http.StatusNotFound)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -53,7 +58,7 @@ func animeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) 
 	io.WriteString(w, string(js))
 }
 
-func episodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
+func episodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client, svc *s3.S3) {
 	animeId, err := strconv.Atoi(r.URL.Query().Get("id"))
 	if err != nil {
 		http.Error(w, "Incorrect ID format.", http.StatusNotAcceptable)
@@ -73,15 +78,18 @@ func episodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client
 		http.Error(w, "That episode could not be found.", http.StatusNotFound)
 		return
 	}
-	js, err := json.Marshal(anime.Episodes[epNum])
+	url, err := getObject(svc, anime.Episodes[epNum].Key)
 	if err != nil {
-		http.Error(w, "Error parsing the anime.", http.StatusInternalServerError)
+		http.Error(w, "Error retrieving the URL.", http.StatusInternalServerError)
 		return
+	}
+	if len(url) == 0 {
+		http.Error(w, "No results found.", http.StatusNotFound)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(200)
-	io.WriteString(w, string(js))
+	fmt.Fprintf(w, "{\"url\": \"%s\"}", url)
 }
 
 func userHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
@@ -100,6 +108,9 @@ func userHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
 	if err != nil {
 		http.Error(w, "Error parsing the user.", http.StatusInternalServerError)
 		return
+	}
+	if len(js) == 0 {
+		http.Error(w, "No results found.", http.StatusNotFound)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -127,7 +138,7 @@ func addUserHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(200)
-	io.WriteString(w, "{success: true}")
+	io.WriteString(w, "{\"success\": true}")
 }
 
 func addAnimeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
@@ -150,7 +161,7 @@ func addAnimeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Clien
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(200)
-	io.WriteString(w, "{success: true}")
+	io.WriteString(w, "{\"success\": true}")
 }
 
 func addEpisodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
@@ -176,5 +187,5 @@ func addEpisodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Cli
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(200)
-	io.WriteString(w, "{success: true}")
+	io.WriteString(w, "{\"success\": true}")
 }

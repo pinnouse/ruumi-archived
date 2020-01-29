@@ -23,6 +23,7 @@ func main() {
 	//Database setup first
 	client := connectDB()
 	defer client.Disconnect(context.Background())
+	svc := newSession()
 
 	r := mux.NewRouter()
 
@@ -35,7 +36,7 @@ func main() {
 		animeHandler(w, r, client)
 	}).Methods("GET")
 	r.HandleFunc("/episode", func(w http.ResponseWriter, r *http.Request) {
-		episodeHandler(w, r, client)
+		episodeHandler(w, r, client, svc)
 	}).Methods("GET")
 	r.HandleFunc("/user", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
