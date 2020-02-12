@@ -10,6 +10,7 @@ type Anime struct {
 	Id        int32     `json:"id"`
 	Title     string    `json:"title"`
 	AltTitles []string  `json:"altTitles"`
+	Poster    string    `json:"poster"`
 	Episodes  []Episode `json:"episodes"`
 }
 

@@ -74,22 +74,24 @@ func episodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client
 		http.Error(w, "Anime not found, check logs for details.", http.StatusNotFound)
 		return
 	}
-	if epNum > len(anime.Episodes) || epNum < 1 {
-		http.Error(w, "That episode could not be found.", http.StatusNotFound)
-		return
+	for _, e := range anime.Episodes {
+		if e.EpNum == uint8(epNum) {
+			url, err := getObject(svc, e.Key)
+			if err != nil {
+				http.Error(w, "Error retrieving the URL.", http.StatusInternalServerError)
+				return
+			}
+			if len(url) == 0 {
+				http.Error(w, "No results found.", http.StatusNotFound)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.WriteHeader(200)
+			fmt.Fprintf(w, "{\"url\": \"%s\"}", url)
+			return
+		}
 	}
-	url, err := getObject(svc, anime.Episodes[epNum].Key)
-	if err != nil {
-		http.Error(w, "Error retrieving the URL.", http.StatusInternalServerError)
-		return
-	}
-	if len(url) == 0 {
-		http.Error(w, "No results found.", http.StatusNotFound)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(200)
-	fmt.Fprintf(w, "{\"url\": \"%s\"}", url)
+	http.Error(w, "That episode could not be found.", http.StatusNotFound)
 }
 
 func userHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {

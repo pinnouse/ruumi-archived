@@ -12,6 +12,7 @@ func newSession() *s3.S3 {
 	sess := session.Must(session.NewSession())
 	svc := s3.New(sess, &aws.Config{
 		Endpoint: aws.String(os.Getenv("S3_ENDPOINT")),
+		Region:   aws.String(os.Getenv("S3_REGION")),
 	})
 	return svc
 }

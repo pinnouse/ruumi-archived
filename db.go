@@ -66,13 +66,8 @@ func search(client *mongo.Client, query string) (results []Anime, err error) {
 	if err != nil {
 		log.Println(err)
 	}
-	defer cur.Close(ctx)
-	for cur.Next(ctx) {
-		var result Anime
-		if err = cur.Decode(&result); err != nil {
-			log.Println(err)
-		}
-		results = append(results, result)
+	if err = cur.All(ctx, &results); err != nil {
+		log.Println(err)
 	}
 	if err = cur.Err(); err != nil {
 		log.Println(err)
