@@ -37,12 +37,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client)
 }
 
 func animeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
-	animeId, err := strconv.Atoi(r.URL.Query().Get("id"))
-	if err != nil {
-		http.Error(w, "Incorrect ID format.", http.StatusNotAcceptable)
-		return
-	}
-	anime, err := getAnime(client, int32(animeId))
+	anime, err := getAnime(client, r.URL.Query().Get("id"))
 	if err != nil {
 		http.Error(w, "Anime not found, check logs for details.", http.StatusNotFound)
 		return
@@ -59,17 +54,12 @@ func animeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) 
 }
 
 func episodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client, svc *s3.S3) {
-	animeId, err := strconv.Atoi(r.URL.Query().Get("id"))
-	if err != nil {
-		http.Error(w, "Incorrect ID format.", http.StatusNotAcceptable)
-		return
-	}
 	epNum, err := strconv.Atoi(r.URL.Query().Get("ep"))
 	if err != nil {
 		http.Error(w, "Incorrect episode number.", http.StatusNotFound)
 		return
 	}
-	anime, err := getAnime(client, int32(animeId))
+	anime, err := getAnime(client, r.URL.Query().Get("id"))
 	if err != nil {
 		http.Error(w, "Anime not found, check logs for details.", http.StatusNotFound)
 		return
@@ -92,55 +82,6 @@ func episodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client
 		}
 	}
 	http.Error(w, "That episode could not be found.", http.StatusNotFound)
-}
-
-func userHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
-	userId := r.URL.Query().Get("id")
-	_, err := strconv.ParseUint(userId, 10, 64)
-	if len(userId) == 0 || err != nil {
-		http.Error(w, "Incorrect ID format.", http.StatusNotAcceptable)
-		return
-	}
-	user, err := getUser(client, userId)
-	if err != nil {
-		http.Error(w, "User not found, check logs for details.", http.StatusNotFound)
-		return
-	}
-	js, err := json.Marshal(user)
-	if err != nil {
-		http.Error(w, "Error parsing the user.", http.StatusInternalServerError)
-		return
-	}
-	if len(js) == 0 {
-		http.Error(w, "No results found.", http.StatusNotFound)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(200)
-	io.WriteString(w, string(js))
-}
-
-func addUserHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read body data.", http.StatusNotAcceptable)
-		return
-	}
-	var user User
-	err = json.Unmarshal(body, &user)
-	if err != nil {
-		http.Error(w, "Could not parse the user.", http.StatusInternalServerError)
-		return
-	}
-	err = addUser(client, user)
-	if err != nil {
-		http.Error(w, "Failed to add user to DB.", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(200)
-	io.WriteString(w, "{\"success\": true}")
 }
 
 func addAnimeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
@@ -173,7 +114,7 @@ func addEpisodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Cli
 		return
 	}
 	var response struct {
-		animeId int32
+		animeId string
 		episode Episode
 	}
 	err = json.Unmarshal(body, &response)

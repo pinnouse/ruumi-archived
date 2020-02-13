@@ -38,15 +38,6 @@ func main() {
 	r.HandleFunc("/episode", func(w http.ResponseWriter, r *http.Request) {
 		episodeHandler(w, r, client, svc)
 	}).Methods("GET")
-	r.HandleFunc("/user", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			userHandler(w, r, client)
-		} else if r.Method == "POST" {
-			addUserHandler(w, r, client)
-		} else {
-			http.Error(w, "Method not allowed.", http.StatusMethodNotAllowed)
-		}
-	}).Methods("GET", "POST")
 	r.HandleFunc("/addAnime", func(w http.ResponseWriter, r *http.Request) {
 		addAnimeHandler(w, r, client)
 	}).Methods("POST")

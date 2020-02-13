@@ -39,18 +39,6 @@ func dbCollection(client *mongo.Client, collectionName string) (collection *mong
 	return client.Database("ruumi").Collection(collectionName)
 }
 
-func getUser(client *mongo.Client, userId string) (user User, err error) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	err = dbCollection(client, "users").FindOne(ctx, bson.M{"id": userId}).Decode(&user)
-	return
-}
-
-func addUser(client *mongo.Client, user User) (err error) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	_, err = dbCollection(client, "users").InsertOne(ctx, user)
-	return
-}
-
 func search(client *mongo.Client, query string) (results []Anime, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	cur, err := dbCollection(client, "anime").Find(ctx, bson.D{
@@ -75,10 +63,15 @@ func search(client *mongo.Client, query string) (results []Anime, err error) {
 	return
 }
 
-func getAnime(client *mongo.Client, id int32) (result Anime, err error) {
+func getAnime(client *mongo.Client, id string) (result Anime, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	objectId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	err = dbCollection(client, "anime").FindOne(
-		ctx, bson.M{"id": id}).Decode(&result)
+		ctx, bson.M{"_id": objectId}).Decode(&result)
 	if err != nil {
 		log.Println(err)
 	}
@@ -91,11 +84,15 @@ func addAnime(client *mongo.Client, anime Anime) (err error) {
 	return
 }
 
-func addEpisode(client *mongo.Client, animeId int32, episode Episode) (err error) {
+func addEpisode(client *mongo.Client, animeId string, episode Episode) (err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	objectId, err := primitive.ObjectIDFromHex(animeId)
+	if err != nil {
+		return
+	}
 	_, err = dbCollection(client, "anime").UpdateOne(
 		ctx,
-		bson.M{"id": animeId},
+		objectId,
 		bson.D{{
 			"episodes",
 			bson.D{{"$addToSet", episode}}},
