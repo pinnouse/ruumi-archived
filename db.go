@@ -63,6 +63,26 @@ func search(client *mongo.Client, query string) (results []Anime, err error) {
 	return
 }
 
+func getRandom(client *mongo.Client, amount int) (results []Anime, err error) {
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	pipeline := bson.D{
+		{"$sample", bson.D{
+			{"size", amount},
+		}},
+	}
+	cur, err := dbCollection(client, "anime").Aggregate(ctx, mongo.Pipeline{pipeline})
+	if err != nil {
+		log.Println(err)
+	}
+	if err = cur.All(ctx, &results); err != nil {
+		log.Println(err)
+	}
+	if err = cur.Err(); err != nil {
+		log.Println(err)
+	}
+	return
+}
+
 func getAnime(client *mongo.Client, id string) (result Anime, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	objectId, err := primitive.ObjectIDFromHex(id)

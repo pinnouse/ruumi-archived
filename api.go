@@ -36,6 +36,28 @@ func searchHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client)
 	io.WriteString(w, string(js))
 }
 
+func randomHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
+	amount, err := strconv.Atoi(r.URL.Query().Get("a"))
+	if err != nil {
+		http.Error(w, "Random amount no configured correctly.", http.StatusNotFound)
+		return
+	}
+	random, err := getRandom(client, amount)
+	if err != nil {
+		http.Error(w, "Could not fetch random anime.", http.StatusNotFound)
+		return
+	}
+	js, err := json.Marshal(random)
+	if err != nil {
+		http.Error(w, "Error parsing animes.", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(200)
+	io.WriteString(w, string(js))
+}
+
 func animeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
 	anime, err := getAnime(client, r.URL.Query().Get("id"))
 	if err != nil {

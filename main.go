@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		if os.Getenv("AUTH") == "" || r.Header.Get("Authorization") == os.Getenv("AUTH") {
 			next.ServeHTTP(w, r)
 		} else {
+			log.Println(fmt.Sprintf("Some bad user is doing something: %s", r.RemoteAddr))
 			http.Error(w, "Not authorized.", http.StatusForbidden)
 		}
 	})
@@ -31,6 +33,9 @@ func main() {
 
 	r.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 		searchHandler(w, r, client)
+	}).Methods("GET")
+	r.HandleFunc("/random", func(w http.ResponseWriter, r *http.Request) {
+		randomHandler(w, r, client)
 	}).Methods("GET")
 	r.HandleFunc("/anime", func(w http.ResponseWriter, r *http.Request) {
 		animeHandler(w, r, client)
