@@ -34,8 +34,8 @@ func main() {
 	r.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 		searchHandler(w, r, client)
 	}).Methods("GET")
-	r.HandleFunc("/random", func(w http.ResponseWriter, r *http.Request) {
-		randomHandler(w, r, client)
+	r.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
+		listHandler(w, r, client)
 	}).Methods("GET")
 	r.HandleFunc("/anime", func(w http.ResponseWriter, r *http.Request) {
 		animeHandler(w, r, client)
@@ -45,9 +45,6 @@ func main() {
 	}).Methods("GET")
 	r.HandleFunc("/addAnime", func(w http.ResponseWriter, r *http.Request) {
 		addAnimeHandler(w, r, client)
-	}).Methods("POST")
-	r.HandleFunc("/addEpisode", func(w http.ResponseWriter, r *http.Request) {
-		addEpisodeHandler(w, r, client)
 	}).Methods("POST")
 
 	srv := &http.Server{

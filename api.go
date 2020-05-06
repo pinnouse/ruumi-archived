@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/service/s3"
+	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"io/ioutil"
@@ -36,13 +37,13 @@ func searchHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client)
 	io.WriteString(w, string(js))
 }
 
-func randomHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
+func listHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
 	amount, err := strconv.Atoi(r.URL.Query().Get("a"))
 	if err != nil {
 		http.Error(w, "Random amount no configured correctly.", http.StatusNotFound)
 		return
 	}
-	random, err := getRandom(client, amount)
+	random, err := getList(client, amount)
 	if err != nil {
 		http.Error(w, "Could not fetch random anime.", http.StatusNotFound)
 		return
@@ -86,24 +87,21 @@ func episodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client
 		http.Error(w, "Anime not found, check logs for details.", http.StatusNotFound)
 		return
 	}
-	for _, e := range anime.Episodes {
-		if e.EpNum == uint8(epNum) {
-			url, err := getObject(svc, e.Key)
-			if err != nil {
-				http.Error(w, "Error retrieving the URL.", http.StatusInternalServerError)
-				return
-			}
-			if len(url) == 0 {
-				http.Error(w, "No results found.", http.StatusNotFound)
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.WriteHeader(200)
-			fmt.Fprintf(w, "{\"url\": \"%s\"}", url)
-			return
-		}
+	key := fmt.Sprintf(anime.Key, epNum)
+	log.Info("Got key", key)
+	url, err := getObject(svc, key)
+	if err != nil {
+		http.Error(w, "Error retrieving the URL.", http.StatusInternalServerError)
+		log.Error("Error retrieving url: ", err)
+		return
 	}
-	http.Error(w, "That episode could not be found.", http.StatusNotFound)
+	if len(url) == 0 {
+		http.Error(w, "No results found.", http.StatusNotFound)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(200)
+	fmt.Fprintf(w, "{\"url\": \"%s\"}", url)
 }
 
 func addAnimeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
@@ -121,32 +119,6 @@ func addAnimeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Clien
 	err = addAnime(client, anime)
 	if err != nil {
 		http.Error(w, "Failed to add anime to DB.", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(200)
-	io.WriteString(w, "{\"success\": true}")
-}
-
-func addEpisodeHandler(w http.ResponseWriter, r *http.Request, client *mongo.Client) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read body data.", http.StatusNotAcceptable)
-		return
-	}
-	var response struct {
-		animeId string
-		episode Episode
-	}
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		http.Error(w, "Could not parse the episode.", http.StatusInternalServerError)
-		return
-	}
-	err = addEpisode(client, response.animeId, response.episode)
-	if err != nil {
-		http.Error(w, "Failed to add episode to DB.", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

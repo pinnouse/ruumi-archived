@@ -15,7 +15,7 @@ import (
 func connectDB() (client *mongo.Client) {
 	client, err := mongo.NewClient(options.Client().ApplyURI(
 		fmt.Sprintf(
-			"mongodb://%s:27017/?readPreference=primary&ssl=false",
+			"mongodb://%s/?readPreference=primary&ssl=false",
 			func() string {
 				if len(os.Getenv("DB_HOST")) > 0 {
 					return os.Getenv("DB_HOST")
@@ -63,7 +63,7 @@ func search(client *mongo.Client, query string) (results []Anime, err error) {
 	return
 }
 
-func getRandom(client *mongo.Client, amount int) (results []Anime, err error) {
+func getList(client *mongo.Client, amount int) (results []Anime, err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	pipeline := bson.D{
 		{"$sample", bson.D{
@@ -101,21 +101,5 @@ func getAnime(client *mongo.Client, id string) (result Anime, err error) {
 func addAnime(client *mongo.Client, anime Anime) (err error) {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	_, err = dbCollection(client, "anime").InsertOne(ctx, anime)
-	return
-}
-
-func addEpisode(client *mongo.Client, animeId string, episode Episode) (err error) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	objectId, err := primitive.ObjectIDFromHex(animeId)
-	if err != nil {
-		return
-	}
-	_, err = dbCollection(client, "anime").UpdateOne(
-		ctx,
-		objectId,
-		bson.D{{
-			"episodes",
-			bson.D{{"$addToSet", episode}}},
-		})
 	return
 }
