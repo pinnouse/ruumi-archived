@@ -15,7 +15,7 @@ import (
 func connectDB() (client *mongo.Client) {
 	client, err := mongo.NewClient(options.Client().ApplyURI(
 		fmt.Sprintf(
-			"mongodb://%s/?readPreference=primary&ssl=false",
+			"%s",
 			func() string {
 				if len(os.Getenv("DB_HOST")) > 0 {
 					return os.Getenv("DB_HOST")
